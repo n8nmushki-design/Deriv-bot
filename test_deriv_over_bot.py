@@ -5,7 +5,7 @@ import urllib.request
 import threading
 import time
 import config
-from deriv_over_bot import extract_last_digit, DerivBot, WebDashboardHandler, start_http
+from deriv_over_bot import extract_last_digit, DerivBot, serve_http
 
 class TestDerivOverBot(unittest.TestCase):
 
@@ -71,9 +71,8 @@ class TestDerivOverBot(unittest.TestCase):
         bot.balance = 100.0
         bot.session_profit = 2.5
 
-        # Override PORT for test
         config.PORT = 10088
-        t = threading.Thread(target=start_http, args=(bot,), daemon=True)
+        t = threading.Thread(target=serve_http, args=(bot,), daemon=True)
         t.start()
         time.sleep(1)
 
