@@ -4,8 +4,8 @@ import json
 import urllib.request
 import threading
 import time
-from deriv_over_bot import extract_last_digit, DerivBot, BARRIER_SEQ, PROB_THRESHOLD, WebDashboardHandler, start_http
-from http.server import HTTPServer
+import config
+from deriv_over_bot import extract_last_digit, DerivBot, WebDashboardHandler, start_http
 
 class TestDerivOverBot(unittest.TestCase):
 
@@ -53,16 +53,16 @@ class TestDerivOverBot(unittest.TestCase):
     def test_barrier_progression_logic(self):
         bot = DerivBot()
 
-        self.assertEqual(BARRIER_SEQ[bot.barrier_idx], 0)
+        self.assertEqual(config.BARRIER_SEQ[bot.barrier_idx], 0)
 
-        bot.barrier_idx = min(bot.barrier_idx + 1, len(BARRIER_SEQ) - 1)
-        self.assertEqual(BARRIER_SEQ[bot.barrier_idx], 5)
+        bot.barrier_idx = min(bot.barrier_idx + 1, len(config.BARRIER_SEQ) - 1)
+        self.assertEqual(config.BARRIER_SEQ[bot.barrier_idx], 5)
 
-        bot.barrier_idx = min(bot.barrier_idx + 1, len(BARRIER_SEQ) - 1)
-        self.assertEqual(BARRIER_SEQ[bot.barrier_idx], 5)
+        bot.barrier_idx = min(bot.barrier_idx + 1, len(config.BARRIER_SEQ) - 1)
+        self.assertEqual(config.BARRIER_SEQ[bot.barrier_idx], 5)
 
         bot.barrier_idx = 0
-        self.assertEqual(BARRIER_SEQ[bot.barrier_idx], 0)
+        self.assertEqual(config.BARRIER_SEQ[bot.barrier_idx], 0)
 
     def test_web_ui_http_server(self):
         bot = DerivBot()
@@ -71,8 +71,8 @@ class TestDerivOverBot(unittest.TestCase):
         bot.balance = 100.0
         bot.session_profit = 2.5
 
-        # Start HTTP server on test port 10088
-        os.environ["PORT"] = "10088"
+        # Override PORT for test
+        config.PORT = 10088
         t = threading.Thread(target=start_http, args=(bot,), daemon=True)
         t.start()
         time.sleep(1)
