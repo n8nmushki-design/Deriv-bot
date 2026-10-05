@@ -19,27 +19,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 import websocket
 
-# ========== CONFIG ==========
-API_TOKEN = os.environ.get("DERIV_TOKEN", "").strip()
-APP_ID = int(os.environ.get("DERIV_APP_ID", "1089"))
-STAKE = float(os.environ.get("DERIV_STAKE", "0.25"))
-DURATION = int(os.environ.get("DERIV_DURATION", "3"))          # ticks
-DURATION_UNIT = "t"
-BARRIER_SEQ = [0, 5, 5, 6, 6, 7, 7, 8, 8]
-TICK_SAMPLE = 100     # last N ticks for digit probs
-PROB_THRESHOLD = 10.0 # % for digit 0 and 1
-SCAN_INTERVAL = 5     # seconds between scans
-DAILY_TP = float(os.environ.get("DERIV_DAILY_TP", "5.0"))        # stop when session profit >= this
-DAILY_SL = float(os.environ.get("DERIV_DAILY_SL", "-1.0"))       # stop when session profit <= this
-TRADE_TP = float(os.environ.get("DERIV_TRADE_TP", "1.0"))        # sell if floating profit >= this
-TRADE_SL = float(os.environ.get("DERIV_TRADE_SL", "-0.5"))       # sell if floating profit <= this
-# ============================
-
-# Common 1-second volatility indices
-CANDIDATE_SYMBOLS = [
-    "1HZ10V", "1HZ25V", "1HZ50V", "1HZ75V", "1HZ100V",
-    "R_10", "R_25", "R_50", "R_75", "R_100"
-]
+import config
 
 # Global log buffer for UI dashboard
 logs_buffer = deque(maxlen=100)
@@ -92,12 +72,12 @@ class DerivBot:
         self.trades_history = []
 
     def connect(self):
-        if not API_TOKEN:
+        if not config.API_TOKEN:
             log_event("[-] Error: DERIV_TOKEN environment variable is not set.")
             self.running = False
             return
 
-        url = f"wss://ws.derivws.com/websockets/v3?app_id={APP_ID}"
+        url = f"wss://ws.derivws.com/websockets/v3?app_id={config.APP_ID}"
         log_event(f"[+] Connecting to {url}...")
         self.ws = websocket.WebSocketApp(
             url,
@@ -118,7 +98,7 @@ class DerivBot:
 
     def on_open(self, ws):
         log_event("[+] Connected to WebSocket")
-        self.send({"authorize": API_TOKEN})
+        self.send({"authorize": config.API_TOKEN})
 
     def on_message(self, ws, message):
         try:
@@ -139,7 +119,7 @@ class DerivBot:
             self.balance = float(data["authorize"].get("balance", 0))
             self.start_balance = self.balance
             self.session_profit = 0.0
-            log_event(f"[+] Authorized | Balance: ${self.balance:.2f} | Daily TP:${DAILY_TP} SL:${DAILY_SL}")
+            log_event(f"[+] Authorized | Balance: ${self.balance:.2f} | Daily TP:${config.DAILY_TP} SL:${config.DAILY_SL}")
             self.send({"balance": 1, "subscribe": 1})
             # Get active symbols and filter
             self.send({"active_symbols": "brief", "product_type": "basic"})
@@ -153,9 +133,9 @@ class DerivBot:
             available = []
             for s in symbols:
                 sym = s.get("symbol") or s.get("underlying_symbol")
-                if sym and (sym in CANDIDATE_SYMBOLS or "1HZ" in sym or sym.startswith("R_")):
+                if sym and (sym in config.CANDIDATE_SYMBOLS or "1HZ" in sym or sym.startswith("R_")):
                     available.append(sym)
-            self.symbols = list(set(available)) or CANDIDATE_SYMBOLS
+            self.symbols = list(set(available)) or config.CANDIDATE_SYMBOLS
             log_event(f"[+] Scanning {len(self.symbols)} symbols: {self.symbols}")
             for sym in self.symbols:
                 self.ticks[sym] = []
@@ -167,7 +147,7 @@ class DerivBot:
             last_digit = extract_last_digit(tick)
             if last_digit is not None and sym in self.ticks:
                 self.ticks[sym].append(last_digit)
-                if len(self.ticks[sym]) > TICK_SAMPLE:
+                if len(self.ticks[sym]) > config.TICK_SAMPLE:
                     self.ticks[sym].pop(0)
 
         elif msg_type == "proposal":
@@ -181,7 +161,7 @@ class DerivBot:
             # Buy immediately
             self.send({
                 "buy": prop["id"],
-                "price": STAKE
+                "price": config.STAKE
             })
 
         elif msg_type == "buy":
@@ -199,7 +179,7 @@ class DerivBot:
                 "longcode": longcode,
                 "status": "OPEN",
                 "profit": 0.0,
-                "stake": STAKE,
+                "stake": config.STAKE,
                 "time": time.strftime("%H:%M:%S")
             }
             self.send({
@@ -230,7 +210,7 @@ class DerivBot:
                 if won:
                     self.barrier_idx = 0
                 else:
-                    self.barrier_idx = min(self.barrier_idx + 1, len(BARRIER_SEQ) - 1)
+                    self.barrier_idx = min(self.barrier_idx + 1, len(config.BARRIER_SEQ) - 1)
 
                 if "subscription" in data:
                     self.send({"forget": data["subscription"]["id"]})
@@ -238,11 +218,11 @@ class DerivBot:
                 self.is_trading = False
                 self.active_contract_info = None
 
-                if self.session_profit >= DAILY_TP:
-                    log_event(f"[DAILY TP REACHED] ${self.session_profit:.2f} >= ${DAILY_TP}. Bot stopping.")
+                if self.session_profit >= config.DAILY_TP:
+                    log_event(f"[DAILY TP REACHED] ${self.session_profit:.2f} >= ${config.DAILY_TP}. Bot stopping.")
                     self.running = False
-                elif self.session_profit <= DAILY_SL:
-                    log_event(f"[DAILY SL HIT] ${self.session_profit:.2f} <= ${DAILY_SL}. Bot stopping.")
+                elif self.session_profit <= config.DAILY_SL:
+                    log_event(f"[DAILY SL HIT] ${self.session_profit:.2f} <= ${config.DAILY_SL}. Bot stopping.")
                     self.running = False
             else:
                 # Still open – check per-trade SL/TP
@@ -250,8 +230,8 @@ class DerivBot:
                 if self.active_contract_info:
                     self.active_contract_info["profit"] = profit
 
-                if profit >= TRADE_TP or profit <= TRADE_SL:
-                    log_event(f"[TRADE {'TP' if profit >= TRADE_TP else 'SL'}] Floating ${profit:.2f} → selling")
+                if profit >= config.TRADE_TP or profit <= config.TRADE_SL:
+                    log_event(f"[TRADE {'TP' if profit >= config.TRADE_TP else 'SL'}] Floating ${profit:.2f} → selling")
                     self.send({"sell": self.last_contract_id, "price": 0})
 
     def on_error(self, ws, error):
@@ -278,7 +258,7 @@ class DerivBot:
                 p0 = round(probs.get(0, 0), 1)
                 p1 = round(probs.get(1, 0), 1)
                 ticks_cnt = len(self.ticks.get(sym, []))
-                signal = (p0 < PROB_THRESHOLD and p1 < PROB_THRESHOLD)
+                signal = (p0 < config.PROB_THRESHOLD and p1 < config.PROB_THRESHOLD)
                 summary[sym] = {
                     "p0": p0,
                     "p1": p1,
@@ -294,10 +274,10 @@ class DerivBot:
             "is_trading": self.is_trading,
             "balance": round(self.balance, 2),
             "session_profit": round(self.session_profit, 2),
-            "barrier": BARRIER_SEQ[self.barrier_idx],
+            "barrier": config.BARRIER_SEQ[self.barrier_idx],
             "barrier_idx": self.barrier_idx,
-            "daily_tp": DAILY_TP,
-            "daily_sl": DAILY_SL,
+            "daily_tp": config.DAILY_TP,
+            "daily_sl": config.DAILY_SL,
             "active_contract": self.active_contract_info,
             "symbols_probs": self.get_all_symbol_probs(),
             "trades_history": self.trades_history[:10],
@@ -312,7 +292,7 @@ class DerivBot:
                     time.sleep(1)
                     continue
 
-                if self.session_profit >= DAILY_TP or self.session_profit <= DAILY_SL:
+                if self.session_profit >= config.DAILY_TP or self.session_profit <= config.DAILY_SL:
                     self.running = False
                     break
 
@@ -328,29 +308,29 @@ class DerivBot:
                         continue
                     p0 = probs.get(0, 100.0)
                     p1 = probs.get(1, 100.0)
-                    if p0 < PROB_THRESHOLD and p1 < PROB_THRESHOLD:
-                        barrier = BARRIER_SEQ[self.barrier_idx]
+                    if p0 < config.PROB_THRESHOLD and p1 < config.PROB_THRESHOLD:
+                        barrier = config.BARRIER_SEQ[self.barrier_idx]
                         log_event(f"[SIGNAL] {sym} | 0:{p0:.1f}% 1:{p1:.1f}% | Over {barrier}")
                         self.is_trading = True
                         self.send({
                             "proposal": 1,
-                            "amount": STAKE,
+                            "amount": config.STAKE,
                             "basis": "stake",
                             "contract_type": "DIGITOVER",
                             "currency": "USD",
-                            "duration": DURATION,
-                            "duration_unit": DURATION_UNIT,
+                            "duration": config.DURATION,
+                            "duration_unit": config.DURATION_UNIT,
                             "symbol": sym,
                             "barrier": str(barrier)
                         })
                         break  # one proposal at a time
-                time.sleep(SCAN_INTERVAL)
+                time.sleep(config.SCAN_INTERVAL)
             except Exception as e:
                 log_event(f"[-] Loop error: {e}")
                 time.sleep(3)
 
     def run(self):
-        if not API_TOKEN:
+        if not config.API_TOKEN:
             log_event("[-] Error: DERIV_TOKEN environment variable is not set. Exiting.")
             return
 
@@ -696,7 +676,7 @@ class WebDashboardHandler(BaseHTTPRequestHandler):
 def start_http(bot):
     global bot_instance
     bot_instance = bot
-    port = int(os.environ.get("PORT", 10000))
+    port = config.PORT
     server = HTTPServer(("0.0.0.0", port), WebDashboardHandler)
     log_event(f"[+] HTTP Web Dashboard available on port {port}")
     server.serve_forever()

@@ -37,7 +37,7 @@ Default Web UI URL: `http://localhost:10000/` (or your Render service domain).
 
 ## Configuration & Environment Variables
 
-All main parameters can be configured via environment variables or modified directly in `deriv_over_bot.py`:
+All main parameters are configured using `.env` or system environment variables (managed via `config.py`):
 
 | Environment Variable | Default Value | Description |
 | :--- | :--- | :--- |
@@ -59,7 +59,7 @@ All main parameters can be configured via environment variables or modified dire
 - Python 3.10+
 - A valid Deriv account and API Token (`DERIV_TOKEN`)
 
-### Installation
+### Installation & Configuration
 
 1. Clone the repository and navigate into the directory:
    ```bash
@@ -72,13 +72,21 @@ All main parameters can be configured via environment variables or modified dire
    pip install -r requirements.txt
    ```
 
-3. Export your `DERIV_TOKEN` and start the bot:
+3. Create your `.env` configuration file from the template:
    ```bash
-   export DERIV_TOKEN="your_deriv_api_token_here"
+   cp .env.example .env
+   ```
+   Edit `.env` and enter your Deriv API token:
+   ```env
+   DERIV_TOKEN="your_deriv_api_token_here"
+   ```
+
+4. Run the bot:
+   ```bash
    python deriv_over_bot.py
    ```
 
-4. Open `http://localhost:10000` in your web browser to view the Web UI Dashboard.
+5. Open `http://localhost:10000` in your web browser to view the Web UI Dashboard.
 
 ### Running Tests
 
