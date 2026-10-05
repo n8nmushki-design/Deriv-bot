@@ -73,8 +73,7 @@ class DerivBot:
 
     def connect(self):
         if not config.API_TOKEN:
-            log_event("[-] Error: DERIV_TOKEN environment variable is not set.")
-            self.running = False
+            log_event("[-] DERIV_TOKEN environment variable is not set. Bot waiting for token configuration...")
             return
 
         url = f"wss://ws.derivws.com/websockets/v3?app_id={config.APP_ID}"
@@ -113,7 +112,6 @@ class DerivBot:
             if "error" in data:
                 log_event(f"[-] Auth failed: {data['error']['message']}")
                 self.authorized = False
-                self.running = False
                 return
             self.authorized = True
             self.balance = float(data["authorize"].get("balance", 0))
@@ -219,11 +217,9 @@ class DerivBot:
                 self.active_contract_info = None
 
                 if self.session_profit >= config.DAILY_TP:
-                    log_event(f"[DAILY TP REACHED] ${self.session_profit:.2f} >= ${config.DAILY_TP}. Bot stopping.")
-                    self.running = False
+                    log_event(f"[DAILY TP REACHED] ${self.session_profit:.2f} >= ${config.DAILY_TP}. Bot trading paused.")
                 elif self.session_profit <= config.DAILY_SL:
-                    log_event(f"[DAILY SL HIT] ${self.session_profit:.2f} <= ${config.DAILY_SL}. Bot stopping.")
-                    self.running = False
+                    log_event(f"[DAILY SL HIT] ${self.session_profit:.2f} <= ${config.DAILY_SL}. Bot trading paused.")
             else:
                 # Still open – check per-trade SL/TP
                 profit = float(poc.get("profit", 0))
@@ -270,6 +266,7 @@ class DerivBot:
     def get_status_summary(self):
         return {
             "authorized": self.authorized,
+            "has_token": bool(config.API_TOKEN),
             "running": self.running,
             "is_trading": self.is_trading,
             "balance": round(self.balance, 2),
@@ -289,12 +286,12 @@ class DerivBot:
         while self.running:
             try:
                 if not self.authorized:
-                    time.sleep(1)
+                    time.sleep(2)
                     continue
 
                 if self.session_profit >= config.DAILY_TP or self.session_profit <= config.DAILY_SL:
-                    self.running = False
-                    break
+                    time.sleep(5)
+                    continue
 
                 if self.is_trading:
                     time.sleep(1)
@@ -330,19 +327,18 @@ class DerivBot:
                 time.sleep(3)
 
     def run(self):
-        if not config.API_TOKEN:
-            log_event("[-] Error: DERIV_TOKEN environment variable is not set. Exiting.")
-            return
-
         threading.Thread(target=self.trade_loop, daemon=True).start()
 
         while self.running:
-            if not self.ws or not self.ws.sock or not self.ws.sock.connected:
-                log_event("[+] Initializing or reconnecting WebSocket connection...")
-                self.connect()
+            if config.API_TOKEN:
+                if not self.ws or not self.ws.sock or not self.ws.sock.connected:
+                    log_event("[+] Initializing or reconnecting WebSocket connection...")
+                    self.connect()
+            else:
+                if not getattr(self, "_token_warned", False):
+                    log_event("[-] Warning: DERIV_TOKEN is not set in environment variables. Web server alive, awaiting token...")
+                    self._token_warned = True
             time.sleep(self.reconnect_delay)
-
-        log_event("[!] Bot finished running.")
 
 
 # Web Dashboard UI HTML Template
@@ -568,7 +564,10 @@ HTML_DASHBOARD = """<!DOCTYPE html>
 
                 // Auth & Running Status
                 const authBadge = document.getElementById('auth-status');
-                if (!data.running) {
+                if (!data.has_token) {
+                    authBadge.className = 'status-badge bg-red';
+                    authBadge.innerText = 'NO DERIV_TOKEN SET';
+                } else if (!data.running) {
                     authBadge.className = 'status-badge bg-red';
                     authBadge.innerText = 'STOPPED';
                 } else if (data.authorized) {
@@ -673,16 +672,18 @@ class WebDashboardHandler(BaseHTTPRequestHandler):
         pass  # silence request logs
 
 
-def start_http(bot):
+def serve_http(bot):
     global bot_instance
     bot_instance = bot
     port = config.PORT
     server = HTTPServer(("0.0.0.0", port), WebDashboardHandler)
-    log_event(f"[+] HTTP Web Dashboard available on port {port}")
+    log_event(f"[+] HTTP Web Dashboard serving on port {port}")
     server.serve_forever()
 
 
 if __name__ == "__main__":
     bot = DerivBot()
-    threading.Thread(target=start_http, args=(bot,), daemon=True).start()
-    bot.run()
+    # Start bot WebSocket & strategy loop in background
+    threading.Thread(target=bot.run, daemon=True).start()
+    # Run HTTP server directly on main thread so process stays alive for Render
+    serve_http(bot)
