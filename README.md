@@ -4,17 +4,30 @@ An automated trading bot for Deriv (formerly Binary.com) designed to trade **Dig
 
 ---
 
-## Overview & Strategy Details
+## What is Required to Run the Bot
+
+To successfully run this bot locally or in the cloud, you need:
+
+1. **Deriv Account**: A real or demo trading account on [Deriv.com](https://deriv.com).
+2. **Deriv API Token (`DERIV_TOKEN`)**:
+   - Go to **Deriv Account Settings** > **API Token**.
+   - Create a token with **Read** and **Trade** scopes.
+3. **Python Environment**: Python 3.10 or higher.
+4. **Dependencies**: `websocket-client` package (listed in `requirements.txt`).
+
+---
+
+## Strategy & Signal Overview
 
 The bot monitors continuous tick data across active Deriv volatility indices (e.g., `1HZ10V`, `1HZ25V`, `1HZ50V`, `R_10`, etc.) and calculates empirical digit distribution over a sample of recent ticks.
 
-### Signal Strategy
-1. **Digit Probability Filter**: Evaluates the last 100 ticks (`TICK_SAMPLE`). A trade signal is triggered for a symbol when both digit `0` and digit `1` probabilities are below **10.0%** (`PROB_THRESHOLD`).
+### Signal Rules
+1. **Digit Probability Filter**: Evaluates the last 100 ticks (`TICK_SAMPLE`). A trade signal triggers for a symbol when both digit `0` and digit `1` probabilities are below **10.0%** (`PROB_THRESHOLD`).
 2. **Barrier Progression Sequence**:
    - Initial contract barrier: `0`
    - Progression on loss: `0 → 5 → 5 → 6 → 6 → 7 → 7 → 8 → 8`
    - On win: Resets barrier back to `0`.
-3. **Execution Locks**: Ensures strictly one active trade proposal/contract at a time to avoid over-leveraging and race conditions.
+3. **Execution Locks**: Ensures strictly one active trade proposal/contract at a time.
 4. **Target Profit & Stop Loss**:
    - **Daily / Session TP**: Defaults to `+$5.00`
    - **Daily / Session SL**: Defaults to `-$1.00`
@@ -55,24 +68,18 @@ All main parameters are configured using `.env` or system environment variables 
 
 ## Setup & Local Usage
 
-### Prerequisites
-- Python 3.10+
-- A valid Deriv account and API Token (`DERIV_TOKEN`)
-
-### Installation & Configuration
-
-1. Clone the repository and navigate into the directory:
+1. Clone the repository:
    ```bash
    git clone <repository_url>
    cd deriv-bot
    ```
 
-2. Install required dependencies:
+2. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Create your `.env` configuration file from the template:
+3. Create your `.env` configuration file:
    ```bash
    cp .env.example .env
    ```
@@ -81,32 +88,45 @@ All main parameters are configured using `.env` or system environment variables 
    DERIV_TOKEN="your_deriv_api_token_here"
    ```
 
-4. Run the bot:
+4. Run the bot locally:
    ```bash
    python deriv_over_bot.py
    ```
 
 5. Open `http://localhost:10000` in your web browser to view the Web UI Dashboard.
 
-### Running Tests
+---
+
+## Cloud Deployment on Render
+
+This bot is configured for automated deployment on [Render](https://render.com) using the included `render.yaml` blueprint file.
+
+### Render Configuration & Run Commands:
+- **Runtime**: Python 3.11
+- **Build Command**:
+  ```bash
+  pip install -r requirements.txt
+  ```
+- **Start / Run Command**:
+  ```bash
+  python deriv_over_bot.py
+  ```
+
+### Steps to Deploy on Render:
+1. Push your repository to GitHub or GitLab.
+2. In the Render Dashboard, click **New +** > **Blueprint**.
+3. Connect your repository (`render.yaml` will be automatically detected).
+4. Under Environment Variables, add your `DERIV_TOKEN` secret.
+5. Click **Apply**. Render will run the build and start commands automatically!
+
+---
+
+## Running Tests
 
 To run the automated unit test suite:
 ```bash
 python -m unittest test_deriv_over_bot.py
 ```
-
----
-
-## Cloud Deployment (Render)
-
-This bot is configured for automated deployment on [Render](https://render.com) using the included `render.yaml` blueprint file. The Web UI Dashboard serves as the public web service on Render.
-
-### Deploying on Render:
-1. Push your repository to GitHub or GitLab.
-2. In the Render Dashboard, click **New +** > **Blueprint**.
-3. Connect your repository. Render will automatically detect `render.yaml`.
-4. Add your `DERIV_TOKEN` secret under environment variables.
-5. Deploy and view the web interface at your Render service URL!
 
 ---
 
