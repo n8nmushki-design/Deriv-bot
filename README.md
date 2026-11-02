@@ -4,6 +4,22 @@ An automated trading bot for Deriv (formerly Binary.com) designed to trade **Dig
 
 ---
 
+## 🚨 IMPORTANT: Fixing "Application Exited Early" Error on Render
+
+If your Render deployment shows the error `==> Application exited early` and logs show `Running 'python -m unittest test_deriv_over_bot.py'`, your Render Service **Start Command** is configured to run tests instead of the bot server!
+
+### How to Fix in Render Dashboard:
+1. Open your service on [Render Dashboard](https://dashboard.render.com).
+2. Go to **Settings** > **Build & Deploy**.
+3. Locate **Start Command**.
+4. Change the **Start Command** to:
+   ```bash
+   python deriv_over_bot.py
+   ```
+5. Click **Save Changes** and click **Manual Deploy** > **Deploy latest commit**.
+
+---
+
 ## What is Required to Run the Bot
 
 To successfully run this bot locally or in the cloud, you need:
@@ -112,18 +128,11 @@ This bot is configured for automated deployment on [Render](https://render.com) 
   python deriv_over_bot.py
   ```
 
-### Steps to Deploy on Render:
-1. Push your repository to GitHub or GitLab.
-2. In the Render Dashboard, click **New +** > **Blueprint**.
-3. Connect your repository (`render.yaml` will be automatically detected).
-4. Under Environment Variables, add your `DERIV_TOKEN` secret.
-5. Click **Apply**. Render will run the build and start commands automatically!
-
 ---
 
 ## Running Tests
 
-To run the automated unit test suite:
+To run the automated unit test suite locally:
 ```bash
 python -m unittest test_deriv_over_bot.py
 ```
